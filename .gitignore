@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Environment Variables
+.env
+.env.local
+*.local
+
+# Node.js / Frontend
+node_modules/
+.next/
+out/
+build/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+*.md
+!README.md
+
+backend/*.md
+!backend/README.md
+
+frontend/*.md
+!frontend/README.md
