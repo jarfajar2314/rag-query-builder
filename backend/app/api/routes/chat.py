@@ -30,6 +30,8 @@ def chat(request: ChatRequest):
 
         planner_source = "rule_based"
 
+        from app.services.date_parser import parse_date_range
+
         if settings.use_openai_intent and settings.openai_api_key:
             try:
                 catalog_context = build_catalog_context(catalog_rows)
@@ -38,6 +40,17 @@ def chat(request: ChatRequest):
                     prompt=request.prompt,
                     catalog_context=catalog_context
                 )
+
+                # Date parsing override
+                parsed_dates = parse_date_range(request.prompt)
+                if parsed_dates:
+                    plan_obj.start_time = parsed_dates["start_time"]
+                    plan_obj.end_time = parsed_dates["end_time"]
+                    if not plan_obj.time_column:
+                        for row in catalog_rows:
+                            if row.get("is_time_column"):
+                                plan_obj.time_column = row["column_name"]
+                                break
 
                 validate_plan_against_catalog(
                     plan=plan_obj,
@@ -53,6 +66,17 @@ def chat(request: ChatRequest):
                     catalog_rows=catalog_rows
                 )
 
+                # Date parsing override
+                parsed_dates = parse_date_range(request.prompt)
+                if parsed_dates:
+                    plan_obj.start_time = parsed_dates["start_time"]
+                    plan_obj.end_time = parsed_dates["end_time"]
+                    if not plan_obj.time_column:
+                        for row in catalog_rows:
+                            if row.get("is_time_column"):
+                                plan_obj.time_column = row["column_name"]
+                                break
+
                 validate_plan_against_catalog(
                     plan=plan_obj,
                     catalog_rows=catalog_rows
@@ -65,33 +89,35 @@ def chat(request: ChatRequest):
                 catalog_rows=catalog_rows
             )
 
+            # Date parsing override
+            parsed_dates = parse_date_range(request.prompt)
+            if parsed_dates:
+                plan_obj.start_time = parsed_dates["start_time"]
+                plan_obj.end_time = parsed_dates["end_time"]
+                if not plan_obj.time_column:
+                    for row in catalog_rows:
+                        if row.get("is_time_column"):
+                            plan_obj.time_column = row["column_name"]
+                            break
+
             validate_plan_against_catalog(
                 plan=plan_obj,
                 catalog_rows=catalog_rows
             )
 
-        plan = plan_obj.model_dump()
-
-        sql = generate_sql(plan)
-        
-        params = {}
-        if "start_time" in plan and "end_time" in plan:
-            params = {
-                "start_time": plan["start_time"],
-                "end_time": plan["end_time"]
-            }
+        sql, params = generate_sql(plan_obj)
 
         validate_sql(sql)
 
-        rows = execute_plan_sql(sql, params, plan)
+        rows = execute_plan_sql(sql, params, plan_obj.model_dump())
 
-        chart = build_chart_config(plan, rows)
+        chart = build_chart_config(plan_obj, rows)
 
         return {
             "answer": "Query executed successfully.",
             "prompt": request.prompt,
             "planner_source": planner_source,
-            "plan": plan,
+            "plan": plan_obj.model_dump(),
             "sql": sql,
             "params": params,
             "rows": rows,
