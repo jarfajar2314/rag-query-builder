@@ -41,6 +41,10 @@ GroupByType = Literal[
 ]
 
 class QueryPlan(BaseModel):
+    status: Literal["ready", "needs_clarification", "unsupported"] = "ready"
+    missing_fields: list[str] = Field(default_factory=list)
+    clarification_question: Optional[str] = None
+
     intent: IntentType
 
     database_type: Optional[DatabaseType] = None
