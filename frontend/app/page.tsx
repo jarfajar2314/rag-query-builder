@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { sendChatPrompt } from "@/lib/api";
@@ -122,9 +122,18 @@ export default function Home() {
 						{/* Answer Card */}
 						<div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
 							<h2 className="text-lg font-semibold text-gray-800 mb-2">
-								Answer
+								{response.status === "needs_clarification" ? "Clarification Needed" : "Answer"}
 							</h2>
-							<p className="text-gray-600">{response.answer}</p>
+							<p className="text-gray-600">
+								{response.status === "needs_clarification" 
+									? response.question 
+									: response.answer}
+							</p>
+							{response.status === "needs_clarification" && (
+								<p className="text-sm text-blue-500 mt-4 italic">
+									Note: This is currently a single-turn tool. Please edit your original prompt above to include this missing information and click Ask again.
+								</p>
+							)}
 						</div>
 
 						{/* Chart (if exists) */}
@@ -145,19 +154,21 @@ export default function Home() {
 						)}
 
 						{/* Debugging section */}
-						<div className="pt-8">
-							<h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-200 pb-2">
-								Developer Tools
-							</h3>
-							<PlanPreview
-								plan={response.plan}
-								source={response.planner_source}
-							/>
-							<SqlPreview
-								sql={response.sql}
-								params={response.params}
-							/>
-						</div>
+						{response.sql && (
+							<div className="pt-8">
+								<h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-200 pb-2">
+									Developer Tools
+								</h3>
+								<PlanPreview
+									plan={response.plan}
+									source={response.planner_source}
+								/>
+								<SqlPreview
+									sql={response.sql}
+									params={response.params}
+								/>
+							</div>
+						)}
 					</div>
 				)}
 			</div>

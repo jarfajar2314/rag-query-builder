@@ -36,4 +36,7 @@ export interface ChatResponse {
     chart_library: string;
     option: Record<string, unknown>;
   };
+  // New fields for clarification flow
+  status?: string; // e.g., "success", "needs_clarification"
+  question?: string; // clarification question when status is "needs_clarification"
 }

@@ -8,6 +8,8 @@ interface SqlPreviewProps {
 export function SqlPreview({ sql, params }: SqlPreviewProps) {
   const [isOpen, setIsOpen] = useState(false);
 
+  if (!sql) return null;
+
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden my-4">
       <button
