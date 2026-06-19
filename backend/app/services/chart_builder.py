@@ -57,11 +57,15 @@ def build_chart_config(plan: QueryPlan, rows: list[dict[str, Any]]) -> dict[str,
         }
         
     elif chart_type == "timeline":
+        title = "Downtime Timeline"
+        if plan.category_value:
+            title = f"{plan.category_value} Downtime Timeline"
+
         return {
-            "chart_library": "timeline",
-            "option": {
-                "title": "Downtime Timeline"
-            }
+            "chart_library": "echarts",
+            "chart_type": "downtime_timeline",
+            "title": title,
+            "data": rows
         }
         
     return {}

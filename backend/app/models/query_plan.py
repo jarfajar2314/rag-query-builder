@@ -51,7 +51,10 @@ class QueryPlan(BaseModel):
     time_column: Optional[str] = None
     value_column: Optional[str] = None
     category_column: Optional[str] = None
+    category_value: Optional[str | int | float | bool] = None
     status_column: Optional[str] = None
+    status_rule_id: Optional[int] = None
+    minimum_duration_seconds: Optional[int] = None
 
     start_time: Optional[str] = None
     end_time: Optional[str] = None

@@ -86,9 +86,9 @@ def validate_plan_against_catalog(
             raise QueryPlanValidationError("Raw table intent requires table chart.")
 
     if plan.intent == "downtime":
-        if not plan.time_column:
-            raise QueryPlanValidationError("Downtime intent requires time_column.")
-        if not plan.status_column:
-            raise QueryPlanValidationError("Downtime intent requires status_column.")
+        if plan.status_rule_id is None:
+            raise QueryPlanValidationError("Downtime intent requires status_rule_id.")
+        if not plan.start_time or not plan.end_time:
+            raise QueryPlanValidationError("Downtime intent requires a date range.")
         if plan.chart_type != "timeline":
             raise QueryPlanValidationError("Downtime intent requires timeline chart.")

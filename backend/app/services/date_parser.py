@@ -58,4 +58,13 @@ def parse_date_range(prompt: str) -> dict | None:
             "source": "rule_based"
         }
     
-    return None
+    # Default Date Range: Last 30 days
+    start_time_default = today_start - timedelta(days=30)
+    end_time_default = today_start + timedelta(days=1)
+    
+    return {
+        "start_time": start_time_default.strftime("%Y-%m-%d %H:%M:%S"),
+        "end_time": end_time_default.strftime("%Y-%m-%d %H:%M:%S"),
+        "timezone": "Asia/Jakarta",
+        "source": "default"
+    }

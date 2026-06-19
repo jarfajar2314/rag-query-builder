@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from openai import OpenAI
 
 from app.config import settings
@@ -45,8 +46,17 @@ QUERY_PLAN_SCHEMA = {
             "category_column": {
                 "type": ["string", "null"]
             },
+            "category_value": {
+                "type": ["string", "number", "boolean", "null"]
+            },
             "status_column": {
                 "type": ["string", "null"]
+            },
+            "status_rule_id": {
+                "type": ["integer", "null"]
+            },
+            "minimum_duration_seconds": {
+                "type": ["integer", "null"]
             },
             "start_time": {
                 "type": ["string", "null"]
@@ -82,7 +92,10 @@ QUERY_PLAN_SCHEMA = {
             "time_column",
             "value_column",
             "category_column",
+            "category_value",
             "status_column",
+            "status_rule_id",
+            "minimum_duration_seconds",
             "start_time",
             "end_time",
             "aggregation",
@@ -99,7 +112,9 @@ def extract_query_plan_with_openai(
     prompt: str,
     catalog_context: str
 ) -> QueryPlan:
-    system_prompt = """
+    current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    system_prompt = f"""
 You are an intent extraction engine for a database query builder.
 
 Your job:
@@ -141,8 +156,20 @@ Aggregation rules:
 - count uses count.
 
 Date rules:
-- If the prompt says "this month" and no exact date is available, use 2026-06-01 to 2026-07-01 for MVP.
-- If the prompt does not mention date, use 2026-06-01 to 2026-07-01 for MVP.
+- Current date context: {current_date}
+- If the prompt specifies a relative date (e.g. "today", "last month"), calculate the exact start and end dates based on the current date context.
+- If the prompt does NOT mention any date, you MUST provide a default date range covering the last 30 days from the current date context.
+- Use format YYYY-MM-DD HH:MM:SS.
+
+For downtime requests:
+- Use intent "downtime".
+- Select only a status_rule_id included in the provided context.
+- Do not invent downtime values.
+- Do not create a SQL condition.
+- Use chart_type "timeline".
+- Select category_value only when the user names a machine or asset.
+- Convert duration phrases such as "longer than 30 minutes" into seconds (e.g. minimum_duration_seconds = 1800).
+- Return intent "unknown" if no suitable status rule is available.
 
 Return only JSON that matches the schema.
 """
