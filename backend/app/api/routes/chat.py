@@ -1,16 +1,18 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from typing import Any
 
 from app.config import settings
-from app.services.metadata_search import search_catalog
-from app.services.catalog_context_builder import build_catalog_context
-from app.services.intent_extractor import extract_query_plan_with_openai
-from app.services.query_planner import build_query_plan_from_catalog
+from app.services.request_understanding import understand_user_request
+from app.services.metadata_retriever import retrieve_metadata
+from app.services.grounded_plan_builder import build_grounded_query_plan
+from app.services.entity_resolver import resolve_entities
 from app.services.query_plan_validator import validate_plan_against_catalog
 from app.services.sql_generator import generate_sql
 from app.services.sql_validator import validate_sql
 from app.services.query_executor import execute_plan_sql
 from app.services.chart_builder import build_chart_config
+from app.services.date_parser import parse_date_range
 
 router = APIRouter()
 
@@ -20,112 +22,93 @@ class ChatRequest(BaseModel):
 @router.post("")
 def chat(request: ChatRequest):
     try:
-        catalog_rows = search_catalog(request.prompt)
+        # Step 1: Understand user intent natively
+        understanding = understand_user_request(request.prompt)
 
-        if not catalog_rows:
+        # Step 2: Retrieve metadata based on parsed concepts
+        catalog_context = retrieve_metadata(understanding=understanding)
+        
+        if not catalog_context.catalog_rows:
             raise HTTPException(
                 status_code=404,
-                detail="No matching catalog metadata found."
+                detail="No matching catalog metadata found for the extracted concepts."
             )
 
-        planner_source = "rule_based"
+        # Step 3: Ground the understanding into a database query plan
+        plan = build_grounded_query_plan(
+            prompt=request.prompt,
+            understanding=understanding,
+            catalog_context=catalog_context
+        )
 
-        from app.services.date_parser import parse_date_range
-
-        if settings.use_openai_intent and settings.openai_api_key:
-            try:
-                catalog_context = build_catalog_context(catalog_rows)
-
-                plan_obj = extract_query_plan_with_openai(
-                    prompt=request.prompt,
-                    catalog_context=catalog_context
-                )
-
-                # Date parsing fallback if planner fails to provide dates
-                if not plan_obj.start_time or not plan_obj.end_time:
-                    parsed_dates = parse_date_range(request.prompt)
-                    if parsed_dates:
-                        plan_obj.start_time = parsed_dates["start_time"]
-                        plan_obj.end_time = parsed_dates["end_time"]
-                
-                # Time column fallback
-                if not plan_obj.time_column:
-                    for row in catalog_rows:
-                        if row.get("is_time_column"):
-                            plan_obj.time_column = row["column_name"]
-                            break
-
-                validate_plan_against_catalog(
-                    plan=plan_obj,
-                    catalog_rows=catalog_rows
-                )
-
-                planner_source = "openai"
-
-            except Exception as e:
-                print("OpenAI Planning failed, falling back to rule-based:", str(e))
-                plan_obj = build_query_plan_from_catalog(
-                    prompt=request.prompt,
-                    catalog_rows=catalog_rows
-                )
-
-                # Date parsing override
-                parsed_dates = parse_date_range(request.prompt)
-                if parsed_dates:
-                    plan_obj.start_time = parsed_dates["start_time"]
-                    plan_obj.end_time = parsed_dates["end_time"]
-                    if not plan_obj.time_column:
-                        for row in catalog_rows:
-                            if row.get("is_time_column"):
-                                plan_obj.time_column = row["column_name"]
-                                break
-
-                validate_plan_against_catalog(
-                    plan=plan_obj,
-                    catalog_rows=catalog_rows
-                )
-
-                planner_source = "rule_based_fallback"
-        else:
-            plan_obj = build_query_plan_from_catalog(
-                prompt=request.prompt,
-                catalog_rows=catalog_rows
+        # Step 4: Handle Clarifications or Unsupported queries
+        if plan.status == "needs_clarification":
+            return {
+                "status": plan.status,
+                "question": plan.clarification_question,
+                "missing_fields": plan.missing_fields,
+            }
+            
+        if plan.status == "unsupported":
+            raise HTTPException(
+                status_code=400,
+                detail=plan.explanation or "This query is unsupported by the current database metadata."
             )
 
-            # Date parsing override
+        # Step 5: Resolve entities against the database
+        resolved_plan = resolve_entities(plan)
+        if resolved_plan.status == "needs_clarification":
+            return {
+                "status": resolved_plan.status,
+                "question": resolved_plan.clarification_question,
+                "missing_fields": resolved_plan.missing_fields,
+            }
+        if resolved_plan.status == "unsupported":
+             raise HTTPException(
+                status_code=400,
+                detail=resolved_plan.explanation or "Entity resolution failed."
+            )
+
+        # Step 6: Normalize Plan Dates
+        # If the plan is missing start_time or end_time, use the fallback date parser
+        if not resolved_plan.start_time or not resolved_plan.end_time:
             parsed_dates = parse_date_range(request.prompt)
             if parsed_dates:
-                plan_obj.start_time = parsed_dates["start_time"]
-                plan_obj.end_time = parsed_dates["end_time"]
-                if not plan_obj.time_column:
-                    for row in catalog_rows:
-                        if row.get("is_time_column"):
-                            plan_obj.time_column = row["column_name"]
-                            break
+                resolved_plan.start_time = parsed_dates["start_time"]
+                resolved_plan.end_time = parsed_dates["end_time"]
+                
+        # Fill in time column if missing but needed
+        if not resolved_plan.time_column:
+            for row in catalog_context.catalog_rows:
+                if row.get("is_time_column"):
+                    resolved_plan.time_column = row["column_name"]
+                    break
 
-            validate_plan_against_catalog(
-                plan=plan_obj,
-                catalog_rows=catalog_rows
-            )
+        # Step 7: Validate against schema definitions
+        validate_plan_against_catalog(
+            plan=resolved_plan,
+            catalog_rows=catalog_context.catalog_rows
+        )
 
-        sql, params = generate_sql(plan_obj)
-
+        # Step 8: Generate and execute SQL securely
+        sql, params = generate_sql(resolved_plan)
         validate_sql(sql)
-
-        rows = execute_plan_sql(sql, params, plan_obj.model_dump())
-
-        chart = build_chart_config(plan_obj, rows)
+        
+        rows = execute_plan_sql(sql, params, resolved_plan.model_dump())
+        chart = build_chart_config(resolved_plan, rows)
 
         return {
             "answer": "Query executed successfully.",
             "prompt": request.prompt,
-            "planner_source": planner_source,
-            "plan": plan_obj.model_dump(),
+            "status": "success",
+            "planner_source": "nlu_grounded",
+            "understanding": understanding.model_dump(),
+            "plan": resolved_plan.model_dump(),
             "sql": sql,
             "params": params,
             "rows": rows,
             "chart": chart,
-            "catalog_matches": catalog_rows,
+            "catalog_matches": catalog_context.catalog_rows,
         }
 
     except HTTPException:
