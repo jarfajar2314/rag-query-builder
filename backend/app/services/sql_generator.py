@@ -1,15 +1,16 @@
+from app.models.query_plan import QueryPlan
 from app.templates.trend import build_trend_query
 from app.templates.summary import build_summary_query
 from app.templates.compare import build_compare_query
 from app.templates.raw_table import build_raw_table_query
 from app.templates.downtime import build_downtime_query
 
-def generate_sql(plan: dict) -> str:
+def generate_sql(plan: QueryPlan) -> tuple[str, dict]:
     """
     Generates SQL string based on the provided JSON query plan.
     Only predefined templates are allowed.
     """
-    intent = plan.get("intent")
+    intent = plan.intent
     
     if intent == "trend":
         return build_trend_query(plan)
