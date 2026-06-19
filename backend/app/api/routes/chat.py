@@ -41,16 +41,19 @@ def chat(request: ChatRequest):
                     catalog_context=catalog_context
                 )
 
-                # Date parsing override
-                parsed_dates = parse_date_range(request.prompt)
-                if parsed_dates:
-                    plan_obj.start_time = parsed_dates["start_time"]
-                    plan_obj.end_time = parsed_dates["end_time"]
-                    if not plan_obj.time_column:
-                        for row in catalog_rows:
-                            if row.get("is_time_column"):
-                                plan_obj.time_column = row["column_name"]
-                                break
+                # Date parsing fallback if planner fails to provide dates
+                if not plan_obj.start_time or not plan_obj.end_time:
+                    parsed_dates = parse_date_range(request.prompt)
+                    if parsed_dates:
+                        plan_obj.start_time = parsed_dates["start_time"]
+                        plan_obj.end_time = parsed_dates["end_time"]
+                
+                # Time column fallback
+                if not plan_obj.time_column:
+                    for row in catalog_rows:
+                        if row.get("is_time_column"):
+                            plan_obj.time_column = row["column_name"]
+                            break
 
                 validate_plan_against_catalog(
                     plan=plan_obj,
