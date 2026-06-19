@@ -10,6 +10,9 @@ def validate_plan_against_catalog(
     """
     Validate the query plan against retrieved catalog rows.
     """
+    if plan.start_time and plan.end_time:
+        if plan.start_time >= plan.end_time:
+            raise QueryPlanValidationError("start_time must be strictly less than end_time.")
     if plan.intent == "unknown":
         raise QueryPlanValidationError(
             "The request cannot be answered from the available catalog metadata."

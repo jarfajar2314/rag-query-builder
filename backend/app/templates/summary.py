@@ -1,11 +1,19 @@
-def build_summary_query(plan: dict) -> str:
-    """
-    Generate SQL for a summary query (e.g. total sales).
-    """
-    return f"""
+from app.models.query_plan import QueryPlan
+
+def build_summary_query(plan: QueryPlan) -> tuple[str, dict]:
+    where_clause = ""
+    params = {}
+    
+    if plan.time_column and plan.start_time and plan.end_time:
+        where_clause = f"WHERE {plan.time_column} >= %(start_time)s AND {plan.time_column} < %(end_time)s"
+        params["start_time"] = plan.start_time
+        params["end_time"] = plan.end_time
+
+    sql = f"""
         SELECT
-            {plan["aggregation"]}({plan["value_column"]}) AS value
-        FROM {plan["schema_name"]}.{plan["table_name"]}
-        WHERE {plan.get("time_column", "1=1")} >= %(start_time)s
-          AND {plan.get("time_column", "1=1")} < %(end_time)s
+            {plan.aggregation.upper()}({plan.value_column}) AS value
+        FROM {plan.schema_name}.{plan.table_name}
+        {where_clause}
     """
+
+    return sql, params

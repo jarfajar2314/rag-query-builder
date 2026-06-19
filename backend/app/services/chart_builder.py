@@ -1,11 +1,12 @@
 from typing import Any
+from app.models.query_plan import QueryPlan
 
-def build_chart_config(plan: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any]:
+def build_chart_config(plan: QueryPlan, rows: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Converts query results into an ECharts configuration object or other UI hints.
     Supports trend, compare, summary, raw_table, and downtime intents.
     """
-    chart_type = plan.get("chart_type")
+    chart_type = plan.chart_type
     
     if chart_type == "line":
         x_data = [str(row["time_bucket"]) for row in rows]
@@ -14,11 +15,11 @@ def build_chart_config(plan: dict[str, Any], rows: list[dict[str, Any]]) -> dict
         return {
             "chart_library": "echarts",
             "option": {
-                "title": {"text": f"{plan.get('value_column', 'Value').capitalize()} Trend"},
+                "title": {"text": f"{plan.value_column or 'Value'} Trend".title()},
                 "tooltip": {"trigger": "axis"},
                 "xAxis": {"type": "category", "data": x_data},
                 "yAxis": {"type": "value"},
-                "series": [{"name": plan.get("value_column", "value"), "type": "line", "data": y_data}]
+                "series": [{"name": plan.value_column or "value", "type": "line", "data": y_data}]
             }
         }
         
@@ -33,7 +34,7 @@ def build_chart_config(plan: dict[str, Any], rows: list[dict[str, Any]]) -> dict
                 "tooltip": {"trigger": "axis"},
                 "xAxis": {"type": "category", "data": x_data},
                 "yAxis": {"type": "value"},
-                "series": [{"name": plan.get("value_column", "value"), "type": "bar", "data": y_data}]
+                "series": [{"name": plan.value_column or "value", "type": "bar", "data": y_data}]
             }
         }
         
@@ -42,7 +43,7 @@ def build_chart_config(plan: dict[str, Any], rows: list[dict[str, Any]]) -> dict
         return {
             "chart_library": "kpi_card",
             "option": {
-                "title": f"Total {plan.get('value_column', 'Value')}",
+                "title": f"Total {plan.value_column or 'Value'}",
                 "value": float(value) if value is not None else 0
             }
         }
